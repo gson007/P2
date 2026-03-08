@@ -68,7 +68,7 @@
       register: script_result
       when: (usr_local_dir.stat.exists or opt_dir.stat.exists )
 
-    - name: Afresh
+    - name: A fresh install
       shell: ./UEMS_LinuxAgent.bin -d /opt
       args:
         chdir: /opt/engine/
