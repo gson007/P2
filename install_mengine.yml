@@ -4,7 +4,7 @@
   ignore_errors: False
   gather_facts: yes
   vars:
-    # ansible_python_interpreter: /bin/python3
+    ansible_python_interpreter: /bin/python3
     otp: 604540
     prompt: y
 
@@ -76,16 +76,6 @@
       register: fresh_install
       when: not (usr_local_dir.stat.exists or opt_dir.stat.exists )
 
-    #    - name: install ManageEngine UEMS_LinuxAgent.bin
-    #      expect:
-    #        chdir: /opt/engine
-    #        command: ./UEMS_LinuxAgent.bin -d /opt -f
-    #        timeout: 60
-    #        responses:
-    #          'Enter One-Time Password':
-    #            - '{{otp}}'
-    #      register: expect_result
-
     - name: update certificates force-enable
       raw: update-ca-trust force-enable
       when:
@@ -129,7 +119,7 @@
 
     - name: print out installation status
       debug:
-        msg: '{{expect_result.stdout_lines}}'
+        msg: '{{script_result.stdout_lines}}'
 
     - name: print out service status of installation
       debug:
