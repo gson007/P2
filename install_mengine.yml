@@ -1,0 +1,141 @@
+- hosts: invent
+  remote_user: godsonan
+  become: true
+  ignore_errors: False
+  gather_facts: yes
+  vars:
+    # ansible_python_interpreter: /bin/python3
+    otp: 604540
+    prompt: y
+
+  tasks:
+    - name: confirm expect is installed
+      package_facts:
+        manager: auto
+    - name: ensure expect packages is installed
+      package:
+        name: expect
+        state: present
+      when: "'expect' not in ansible_facts.packages"
+
+    - name: Confirm if usr local directory exist
+      stat:
+        path: /usr/local/manageengine/uems_agent/RemoveUEMSAgent.sh
+      register: usr_local_dir
+
+    - name: confirm manageengine in opt exist
+      stat:
+        path: /opt/manageengine/uems_agent/RemoveUEMSAgent.sh
+      register: opt_dir
+
+    - name: create installation directory
+      file:
+        path: /opt/engine
+        state: directory
+        mode: 0777
+      when: (usr_local_dir.stat.exists or opt_dir.stat.exists )
+
+    - name: copy manage engine file
+      copy:
+        src: /home/godsonan/Manage-Things/{{item}}
+        dest: /opt/engine
+      loop:
+        - LocalOffice_UEMSLinuxAgent.zip
+        - manageenginelinux.crt
+        - intermediate.crt
+      when: not (usr_local_dir.stat.exists or opt_dir.stat.exists )
+
+    - name: unzip the zipped file
+      unarchive:
+        src: /opt/engine/LocalOffice_UEMSLinuxAgent.zip
+        dest: /opt/engine/
+        mode: 0777
+        remote_src: yes
+      when: not  (usr_local_dir.stat.exists or opt_dir.stat.exists )
+
+    - name: install Mengine using expect
+      shell: |
+        set timeout 60
+        spawn ./UEMS_LinuxAgent.bin -d /opt -f
+
+        expect "Enter (G/g) or (C/c) to proceed with Graphical-User / Command-Line Interface"
+        send "c\b"
+        expect "Enter One-Time Password"
+        send "{{otp}}\b"
+      args:
+        chdir: /opt/engine/
+        executable: /bin/expect
+      register: script_result
+      when: (usr_local_dir.stat.exists or opt_dir.stat.exists )
+
+    - name: Afresh
+      shell: ./UEMS_LinuxAgent.bin -d /opt
+      args:
+        chdir: /opt/engine/
+        executable: /bin/bash
+      register: fresh_install
+      when: not (usr_local_dir.stat.exists or opt_dir.stat.exists )
+
+    #    - name: install ManageEngine UEMS_LinuxAgent.bin
+    #      expect:
+    #        chdir: /opt/engine
+    #        command: ./UEMS_LinuxAgent.bin -d /opt -f
+    #        timeout: 60
+    #        responses:
+    #          'Enter One-Time Password':
+    #            - '{{otp}}'
+    #      register: expect_result
+
+    - name: update certificates force-enable
+      raw: update-ca-trust force-enable
+      when:
+        - ansible_os_family == "RedHat"
+
+    - name: copy certificates
+      copy:
+        src: /opt/engine/{{item}}
+        dest: /etc/pki/ca-trust/source/anchors/
+        remote_src: yes
+      loop:
+        - manageenginelinux.crt
+        - intermediate.crt
+      when:
+        - ansible_os_family == "RedHat"
+
+    - name: copy certificates
+      copy:
+        src: /opt/engine/{{item}}
+        dest: /usr/local/share/ca-certificates/
+        remote_src: yes
+      loop:
+        - manageenginelinux.crt
+        - intermediate.crt
+      when:
+        - ansible_os_family == "Debian"
+
+    - name: update certificates force-enable
+      raw: update-ca-certificates
+      when:
+        - ansible_os_family == "Debian"
+
+    - name: update certificates extract
+      raw: update-ca-trust extract
+      when:
+        - ansible_os_family == "RedHat"
+
+    - name: confirm application status
+      raw: /opt/manageengine/uems_agent/bin/dctroubleshootingtool
+      register: uems_agent_status
+
+    - name: print out installation status
+      debug:
+        msg: '{{expect_result.stdout_lines}}'
+
+    - name: print out service status of installation
+      debug:
+        msg: '{{uems_agent_status.stdout_lines }}'
+
+    - name: Remove /opt/engine directory
+      file:
+        path: /opt/engine
+        state: absent
