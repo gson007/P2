@@ -1,0 +1,92 @@
+- hosts: invent
+  remote_user: godsonan
+  become: true
+  ignore_errors: False
+  gather_facts: yes
+
+  tasks:
+    - name: Confirm zabbix agent is installed
+      package_facts:
+        manager: auto
+
+    - name: Is it installed
+      debug:
+        msg: "{{ansible_facts.packages['zabbix-agent2']}} is installed on system"
+      when: "'zabbix-agent2' in  ansible_facts.packages"
+
+    - name: Create installation directory
+      file:
+        path: /opt/zabbix
+        state: directory
+        mode: 0777
+      when: "'zabbix-agent2' not in  ansible_facts.packages"
+
+    - name: Copy package zabbix for RHEL8
+      copy:
+        src: /home/godsonan/{{item}}
+        dest: /opt/zabbix
+      loop:
+        - zabbix-agent2-7.2.12-release1.el8.x86_64.rpm
+        - zabbix_agent2.conf
+      when:
+        - "'zabbix-agent2' not in  ansible_facts.packages"
+        - ansible_os_family == "RedHat"
+        - ansible_distribution_major_version == "8"
+
+    - name: Copy package zabbix for RHEL9
+      copy:
+        src: /home/godsonan/{{item}}
+        dest: /opt/zabbix
+      loop:
+        - zabbix-agent2-7.2.13-release1.el9.x86_64.rpm
+        - zabbix_agent2.conf
+      when:
+        - "'zabbix-agent2' not in  ansible_facts.packages"
+        - ansible_os_family == "RedHat"
+        - ansible_distribution_major_version == "9"
+
+    - name: Install zabbix package RHEL8
+      yum:
+        name: /opt/zabbix/zabbix-agent2-7.2.12-release1.el8.x86_64.rpm
+        state: present
+        disable_gpg_check: yes
+      when:
+        - "'zabbix-agent2' not in  ansible_facts.packages"
+        - ansible_os_family == "RedHat"
+        - ansible_distribution_major_version == "8"
+
+    - name: Install zabbix package RHEL9
+      yum:
+        name: /opt/zabbix/zabbix-agent2-7.2.13-release1.el9.x86_64.rpm
+        state: present
+        disable_gpg_check: yes
+      when:
+        - "'zabbix-agent2' not in  ansible_facts.packages"
+        - ansible_os_family == "RedHat"
+        - ansible_distribution_major_version == "9"
+
+
+    - name: Copy zabbix config file
+      copy:
+        src: /opt/zabbix/zabbix_agent2.conf
+        dest: /etc/zabbix/
+        mode: 0644
+        remote_src: yes
+      when: "'zabbix-agent2' in  ansible_facts.packages"
+
+    - name: Update host file to include zabbix server
+      raw:
+        echo "10.200.193.80  vdrcjssbshipzabbix" >> /etc/hosts
+      when: "'zabbix-agent2' not in  ansible_facts.packages"
+
+    - name: Restart zabbix server
+      service:
+        name: zabbix-agent2
+        state: restarted
+        enabled: yes
+      when: "'zabbix-agent2' in  ansible_facts.packages"
+
+    - name: Remove installation directory
+      file:
+        path: /opt/zabbix
+        state: absent

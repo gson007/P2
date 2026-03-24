@@ -1,0 +1,31 @@
+- hosts: invent
+  remote_user: godsonan
+  become: true
+  ignore_errors: False
+  gather_facts: yes
+
+  tasks:
+    - name: Confirm zabbix agent is installed
+      package_facts:
+        manager: auto
+
+    - name: Is it installed
+      debug:
+        msg: "{{ansible_facts.packages['zabbix-agent2']}} is installed on system"
+      when: "'zabbix-agent2' in  ansible_facts.packages"
+
+    - name: Modify zabbix config file
+      copy:
+        src: /home/godsonan/{{item}}
+        dest: /etc/zabbix/zabbix_agent2.conf
+      loop:
+        - zabbix_agent2.conf
+      when:
+        - "'zabbix-agent2' in  ansible_facts.packages"
+
+    - name: Restart zabbix server
+      service:
+        name: zabbix-agent2
+        state: restarted
+        enabled: yes
+      when: "'zabbix-agent2' in  ansible_facts.packages"

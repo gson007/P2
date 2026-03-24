@@ -1,0 +1,196 @@
+---
+- hosts: invent
+  remote_user: godsonan
+  ignore_errors: False
+  become: True
+  tasks:
+    - name: remove pkg  vsftpd
+      package:
+        name:
+          - vsftpd
+          - ftp
+          - telnet
+        state: absent
+
+    - name: copy ssh and sshd files
+      copy:
+        src: /home/godsonan/ansible_file/{{item}}
+        dest: /etc/ssh/
+        owner: root
+        group: root
+        mode: 0644
+        backup: yes
+      with_items:
+        - ssh_config
+        - sshd_config
+    - name: copy security directory file
+      copy:
+        src: /home/godsonan/ansible_file/{{item}}
+        dest: /etc/security/{{item}}
+        owner: root
+        group: root
+        mode: 0644
+        backup: yes
+      with_items:
+        - pwquality.conf
+        - faillock.conf
+    - name: copy login def config file
+      copy:
+        src: /home/godsonan/ansible_file/login.defs
+        dest: /etc/login.defs
+        owner: root
+        group: root
+        mode: 0644
+        backup: yes
+
+    - name: Set password algorithm to sha512
+      raw: /usr/sbin/authconfig --passalgo=sha512 --update;/usr/bin/chmod 0644 /etc/passwd;/usr/bin/chown root:root /etc/passwd
+
+    - name: get script
+      copy:
+        src: /home/godsonan/get_user.sh
+        dest: /opt/
+        mode: 0777
+    - name: execute the script
+      raw: /opt/get_user.sh
+      register: users
+
+    - name: Print the usernames
+      debug:
+        msg: '{{users.stdout_lines}}'
+
+    - name: modify user account
+      user:
+        name: { { item } }
+        password_expire_max: 90
+        password_expire_min: 1
+        password_expire_warn: 5
+      loop: '{{ users.stdout_lines }}'
+
+    - name: modify useraccount
+      raw: chage -d 2026-03-20 {{item}}; chage --inactive 90 {{item}};
+      with_items: '{{users.stdout_lines}}'
+
+    - name: change permission
+      raw: chage -d 2026-03-20 root; chage --mindays 1 root ; useradd -D -f 90;chage --inactive 90 root;chage --maxdays 90 root;chown root:root /etc/ssh/sshd_config;chmod u-x,go-rwx /etc/ssh/sshd_config;chmod og-rwx /etc/cron.d;rm -rf /tmp/get_user.sh
+    - name: change file permission and ownership
+      file:
+        path: /etc/{{item}}
+        owner: root
+        group: root
+        mode: og-rwx
+      loop:
+        - crontab
+        - crond
+        - cron.d/
+        - cron.hourly/
+        - cron.daily/
+        - cron.weekly/
+        - cron.monthly/
+
+          #    - name: update common-auth, common-password, common-account file
+          #      copy:
+          #        src: /home/godsonan/{{item}}
+          #        dest: /etc/pam.d/{{item}}
+          #        owner: root
+          #        group: root
+          #        mode: 0644
+          #        backup: yes
+          #      with_items:
+          #        - common-auth
+          #        - common-account
+          #        - common-password
+          #      when: ansible_os_family == "Debian"
+    - name: Copy system-auth as backup for 6
+      copy:
+        src: /home/godsonan/ansible_file/system-auth_6
+        dest: /etc/pam.d/system-auth-local
+        owner: root
+        group: root
+        mode: 0644
+        backup: yes
+      when:
+        - ansible_os_family == "RedHat"
+        - ansible_distribution_major_version == "6"
+
+    - name: Copy password-auth as backup for 6
+      copy:
+        src: /home/godsonan/ansible_file/password-auth_6
+        dest: /etc/pam.d/password-auth-local
+        owner: root
+        group: root
+        mode: 0644
+        backup: yes
+      when:
+        - ansible_os_family == "RedHat"
+        - ansible_distribution_major_version == "6"
+
+    - name: copy password-auth-ac as backup for 7
+      copy:
+        src: /home/godsonan/ansible_file/password-auth_7
+        dest: /etc/pam.d/password-auth-local
+        owner: root
+        group: root
+        mode: 0644
+        backup: yes
+      when:
+        - ansible_os_family == "RedHat"
+        - ansible_distribution_major_version == "7"
+
+    - name: Copy system-auth-ac as backup for 7
+      copy:
+        src: /home/godsonan/ansible_file/system-auth_7
+        dest: /etc/pam.d/system-auth-local
+        owner: root
+        group: root
+        mode: 0644
+        backup: yes
+      when:
+        - ansible_os_family == "RedHat"
+        - ansible_distribution_major_version == "7"
+    - name: fix crypto policy for 8
+      copy:
+        src: /home/godsonan/ansible_file/sshd
+        dest: /etc/sysconfig/sshd
+        owner: root
+        group: root
+        mode: 0640
+        backup: yes
+      when:
+        - ansible_os_family == "RedHat"
+        - ansible_distribution_major_version == "8" or ansible_distribution_major_version == "9"
+    - name: copy password-auth-ac as backup for 8
+      copy:
+        src: /home/godsonan/ansible_file/password-auth_8
+        dest: /etc/pam.d/password-auth-local
+        owner: root
+        group: root
+        mode: 0644
+        backup: yes
+      when:
+        - ansible_os_family == "RedHat"
+        - ansible_distribution_major_version == "8" or ansible_distribution_major_version == "9"
+
+    - name: Copy system-auth-ac as backup for 8
+      copy:
+        src: /home/godsonan/ansible_file/system-auth_8
+        dest: /etc/pam.d/system-auth-local
+        owner: root
+        group: root
+        mode: 0644
+        backup: yes
+      when:
+        - ansible_os_family == "RedHat"
+        - ansible_distribution_major_version == "8" or ansible_distribution_major_version == "9"
+
+    - name: Link the files to password-auth and system-auth
+      raw: /usr/bin/ln -sf /etc/pam.d/password-auth-local /etc/pam.d/password-auth;/usr/bin/ln -sf /etc/pam.d/system-auth-local /etc/pam.d/system-auth
+      when:
+        - ansible_os_family == "RedHat"
+
+    - name: Restart sshd service
+      service:
+        name: sshd
+        state: reloaded
+        enabled: yes
+...

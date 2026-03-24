@@ -1,0 +1,23 @@
+---
+- hosts: invent
+  remote_user: godsonan
+  become: True
+  vars:
+    password: 
+  tasks:
+    - name: get script
+      copy:
+        src: /home/godsonan/get_user.sh
+        dest: /opt/
+        mode: 0777
+    - name: execute the script
+      raw: /opt/get_user.sh
+      register: users
+
+    - name: Print the usernames
+      debug:
+        msg: '{{users.stdout_lines}}'
+
+    - name: update account
+      raw: /usr/bin/chage -d 2026-03-23 --inactive 90 --warndays 5 --mindays 1 --maxdays 90 '{{item}}'
+      loop: '{{users.stdout_lines}}'

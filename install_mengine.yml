@@ -5,8 +5,7 @@
   gather_facts: yes
   vars:
     ansible_python_interpreter: /bin/python3
-    otp: 604540
-    prompt: y
+    otp: 396901
 
   tasks:
     - name: confirm expect is installed
@@ -14,9 +13,13 @@
         manager: auto
     - name: ensure expect packages is installed
       package:
-        name: expect
+        name:
+          - expect
+          - unzip
         state: present
-      when: "'expect' not in ansible_facts.packages"
+      when:
+        - "'expect' not in ansible_facts.packages"
+        - "'unzip' not in ansible_facts.packages"
 
     - name: Confirm if usr local directory exist
       stat:
@@ -59,9 +62,9 @@
         spawn ./UEMS_LinuxAgent.bin -d /opt -f
 
         expect "Enter (G/g) or (C/c) to proceed with Graphical-User / Command-Line Interface"
-        send "c\b"
+        send "c\r"
         expect "Enter One-Time Password"
-        send "{{otp}}\b"
+        send "{{otp}}\r"
       args:
         chdir: /opt/engine/
         executable: /bin/expect
@@ -114,7 +117,10 @@
         - ansible_os_family == "RedHat"
 
     - name: confirm application status
-      raw: /opt/manageengine/uems_agent/bin/dctroubleshootingtool
+      shell: ./dctroubleshootingtool
+      args:
+        chdir: /opt/manageengine/uems_agent/bin/
+        executable: /bin/bash
       register: uems_agent_status
 
     - name: print out installation status
