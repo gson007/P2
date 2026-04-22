@@ -1,0 +1,160 @@
+
+    - name: gather installed package facts
+      package_facts:
+        manager: auto
+    - name: Ensure public key is shared
+      authorized_key:
+        user: godsonan
+        state: present
+        key: '{{item}}'
+      with_file:
+        - ~/.ssh/id_rsa.pub
+
+    - name: update root passwd
+      raw: chage -d 2026-08-16 root;
+
+    - name: confirm mdatp is installed
+      debug:
+        msg: mdatp is installed
+      when: "'mdatp' in  ansible_facts.packages"
+
+    - name: confirm mdatp not installed
+      debug:
+        msg: mdatp is not installed
+      when: "'mdatp' not in  ansible_facts.packages"
+
+    - name: setup internet proxy
+      raw: export http_proxy="http://netproxy.vodacom.cd:8080";export https_proxy="http://netproxy.vodacom.cd:8080"
+
+    - name: setup repository for ubuntu 18.04
+      copy:
+        src: /home/godsonan/
+        dest:
+        repo: 'deb [arch=amd64] https://packages.microsoft.com/ubuntu/18.04/prod bionic main'
+        state: present
+        update_cache: yes
+        filename: microsoft-prod.list
+      when:
+        - ansible_distribution=='Ubuntu' and ansible_distribution_major_version == "18"
+        - "'mdatp' not in  ansible_facts.packages"
+
+    - name: setup repository for ubuntu 20.04
+      apt_repository:
+        repo: 'deb [arch=amd64,armhf,arm64] https://packages.microsoft.com/ubuntu/20.04/prod focal main'
+        state: present
+        update_cache: yes
+        filename: microsoft-prod.list
+      when:
+        - ansible_distribution=="Ubuntu" and ansible_distribution_major_version == "20"
+        - "'mdatp' not in  ansible_facts.packages"
+
+    - name: setup repository for ubuntu 22.04
+      apt_repository:
+        repo: 'deb [arch=amd64,armhf,arm64] https://packages.microsoft.com/ubuntu/22.04/prod jammy main'
+        state: present
+        update_cache: yes
+        filename: microsoft-prod.list
+      when:
+        - ansible_distribution=="Ubuntu" and ansible_distribution_major_version == "22"
+        - "'mdatp' not in  ansible_facts.packages"
+
+    - name: setup repository for ubuntu 24.04
+      apt_repository:
+        repo: 'deb [arch=amd64,arm64,armhf signed-by=/usr/share/keyrings/microsoft-prod.gpg] https://packages.microsoft.com/ubuntu/24.04/prod noble main'
+        state: present
+        update_cache: yes
+        filename: microsoft-prod.list
+      when:
+        - ansible_distribution=="Ubuntu" and ansible_distribution_major_version == "24"
+        - "'mdatp' not in  ansible_facts.packages"
+
+    - name: setup repository for ubuntu 25.04
+      apt_repository:
+        repo: 'deb [arch=amd64,arm64,armhf signed-by=/usr/share/keyrings/microsoft-prod.gpg] https://packages.microsoft.com/ubuntu/25.04/prod plucky main'
+        state: present
+        update_cache: yes
+        filename: microsoft-prod.list
+      when:
+        - ansible_distribution == "Ubuntu" and ansible_distribution_major_version == "25"
+        - "'mdatp' not in  ansible_facts.packages"
+
+    - name: install microsoft apt key for Ubuntu 24 and above
+      raw: cat /tmp/microsoft.asc | gpg --dearmor | tee /usr/share/keyrings/microsoft-prod.gpg > /dev/null
+      when:
+        - ansible_distribution == "Ubuntu" and ansible_distribution_major_version >= "24"
+        - "'mdatp' not in  ansible_facts.packages"
+
+    - name: install microsoft apt key
+      script:
+        cmd: /usr/bin/curl -sSL --no-check-certificate  https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor | sudo tee /etc/apt/trusted.gpg.d/microsoft.gpg > /dev/null
+      when:
+        - ansible_distribution=="Ubuntu" and ansible_distribution_major_version <= "22"
+        - "'mdatp' not in  ansible_facts.packages"
+
+    - name: update ubuntu packages apt
+      apt:
+        update_cache: yes
+      when:
+        - ansible_os_family == "Debian" and ansible_distribution == "Ubuntu"
+        - "'mdatp' not in  ansible_facts.packages"
+
+    - name: install required Ubuntu package
+      apt:
+        name:
+          - gpg
+          - apt-transport-https
+          - mdatp
+          - expect
+        state: present
+        update_cache: yes
+      when:
+        - ansible_os_family == "Debian" and ansible_distribution == "Ubuntu"
+        - "'mdatp' not in  ansible_facts.packages"
+
+    - name: Copy onboarding script
+      copy:
+        src: /home/godsonan/MicrosoftDefenderATPOnboardingLinuxServer.py
+        dest: /opt/
+        mode: 0777
+        owner: root
+        group: root
+
+    - name: Onboard Linux system on RHEL8 and Ubuntu 20.04
+      raw: python3 /opt/MicrosoftDefenderATPOnboardingLinuxServer.py
+      when:
+        - "'mdatp' not in  ansible_facts.packages"
+        - ansible_distribution_major_version >= "20"
+
+    - name: Onboard Linux system on RHEL7 and Ubuntu lesser than 20.04
+      raw: python /opt/MicrosoftDefenderATPOnboardingLinuxServer.py
+      when:
+        - "'mdatp' not in  ansible_facts.packages"
+        - ansible_distribution_major_version == "18"
+
+    - name: Copy mdatp managed json file
+      copy:
+        src: /home/godsonan/mdatp_managed.json
+        dest: /etc/opt/microsoft/mdatp/managed/
+        mode: 0777
+        owner: root
+        group: root
+      notify:
+        - Restart mdatp services
+    - name: set real time and passive mode config
+      raw: mdatp config real-time-protection --value enabled; mdatp config passive-mode --value disabled;
+
+    - name: Test connectivity
+      raw: mdatp connectivity test
+      register: mdatp_output
+
+    - name: display test result
+      debug:
+        msg: '{{mdatp_output.stdout_lines}}'
+
+  handlers:
+    - name: Restart mdatp service
+      systemd_service:
+        name: mdatp
+        state: restarted
+        daemon_reload: true
+        enabled: yes

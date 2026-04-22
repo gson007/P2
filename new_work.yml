@@ -1,0 +1,12 @@
+- hosts: invent
+  remote_user: godsonan
+  become: true
+  ignore_errors: True
+  gather_facts: yes
+
+  tasks:
+    - ansible.builtin.include_tasks: MDE_RHEL_Dist.yml
+      when: ansible_facts['os_family'] == "RedHat"
+
+    - ansible.builtin.include_tasks: MDE_DEBIAN_Dist.yml
+      when: ansible_facts['os_family'] == "Debian"

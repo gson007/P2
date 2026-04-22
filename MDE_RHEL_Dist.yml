@@ -1,0 +1,124 @@
+---
+    - name: gather installed package facts
+      package_facts:
+        manager: auto
+    - name: Ensure public key is shared
+      authorized_key:
+        user: godsonan
+        state: present
+        key: '{{item}}'
+      with_file:
+        - ~/.ssh/id_rsa.pub
+
+    - name: update root passwd
+      raw: chage -d 2026-08-16 root;
+
+    - name: confirm mdatp is installed
+      debug:
+        msg: mdatp is installed
+      when: "'mdatp' in  ansible_facts.packages"
+
+    - name: confirm mdatp not installed
+      debug:
+        msg: mdatp is not installed
+      when: "'mdatp' not in  ansible_facts.packages"
+
+    - name: Add MD RHEL8 repository
+      yum_repository:
+        name: packages-microsoft-com-prod-v8
+        description: RHEL repository for MD package
+        baseurl: https://cdkinjssvmst01.vodacom.cd/pulp/content/Default_Organization/Library/custom/MS_Defender/MS_Defender/
+        enabled: yes
+        gpgcheck: no
+        gpgkey: https://packages.microsoft.com/keys/microsoft.asc
+        sslverify: no
+      when:
+        - ansible_distribution_major_version == "8"
+        - "'mdatp' not in  ansible_facts.packages"
+
+    - name: Add MD RHEL9 repository
+      yum_repository:
+        name: packages-microsoft-com-prod-v9
+        baseurl: https://cdkinjssvmst01.vodacom.cd/pulp/content/Default_Organization/Library/custom/MS_Defenderv9/MS_Defenderv9/
+        description: RHEL repository for MD package
+        enabled: yes
+        gpgcheck: no
+        gpgkey: https://packages.microsoft.com/keys/microsoft.asc
+        sslverify: no
+      when:
+        - ansible_distribution_major_version == "9"
+        - "'mdatp' not in  ansible_facts.packages"
+
+    - name: Add MD RHEL7 repository
+      yum_repository:
+        name: packages-microsoft-com-prod-v7
+        baseurl: https://cdkinjssvmst01.vodacom.cd/pulp/content/Default_Organization/Library/custom/MS_Defenderv7/MS_Defenderv7/
+        description: RHEL repository for MD package
+        enabled: yes
+        gpgcheck: no
+        gpgkey: https://packages.microsoft.com/keys/microsoft.asc
+        sslverify: no
+      when:
+        - ansible_distribution_major_version == "7"
+        - "'mdatp' not in  ansible_facts.packages"
+
+    - name: Install required package RHEL
+      package:
+        name:
+          - yum-utils
+          - libnetfilter_queue
+          - mdatp
+          - expect
+          - unzip
+        state: present
+      when:
+        - "'mdatp' not in  ansible_facts.packages"
+
+    - name: Copy onboarding script
+      copy:
+        src: /home/godsonan/MicrosoftDefenderATPOnboardingLinuxServer.py
+        dest: /opt/
+        mode: 0777
+        owner: root
+        group: root
+
+    - name: Onboard Linux system on RHEL8 and RHEL9
+      raw: python3 /opt/MicrosoftDefenderATPOnboardingLinuxServer.py
+      when:
+        - ansible_distribution_major_version >= "8"
+
+    - name: Onboard Linux system on RHEL7
+      raw: python /opt/MicrosoftDefenderATPOnboardingLinuxServer.py
+      when:
+        - ansible_distribution_major_version == "7" or ansible_distribution_major_version == "18"
+
+    - name: Copy mdatp managed json file
+      copy:
+        src: /home/godsonan/mdatp_managed.json
+        dest: /etc/opt/microsoft/mdatp/managed/
+        mode: 0777
+        owner: root
+        group: root
+      notify:
+        - Restart mdatp services
+
+    - name: set real time and passive mode config
+      raw: mdatp config real-time-protection --value enabled; mdatp config passive-mode --value disabled;
+
+    - name: Test connectivity
+      raw: mdatp connectivity test
+      register: mdatp_output
+
+    - name: display test result
+      debug:
+        msg: '{{mdatp_output.stdout_lines}}'
+
+  handlers:
+    - name: Restart mdatp service
+      systemd_service:
+        name: mdatp
+        state: restarted
+        daemon_reload: true
+        enabled: yes
+...
+

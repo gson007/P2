@@ -35,7 +35,7 @@
       file:
         path: /opt/engine
         state: directory
-        mode: 0777
+        mode: 777
       when: (usr_local_dir.stat.exists or opt_dir.stat.exists )
 
     - name: copy manage engine file
@@ -52,7 +52,7 @@
       unarchive:
         src: /opt/engine/LocalOffice_UEMSLinuxAgent.zip
         dest: /opt/engine/
-        mode: 0777
+        mode: 777
         remote_src: yes
       when: not  (usr_local_dir.stat.exists or opt_dir.stat.exists )
 

@@ -1,0 +1,22 @@
+---
+- hosts: invent
+  remote_user: godsonan
+  ignore_errors: False
+  become: True
+  tasks:
+    - name: copy CBC pmod
+      copy:
+        src: /home/godsonan/DISABLE-CBC.pmod
+        dest: /etc/crypto-policies/policies/modules
+        owner: root
+        group: root
+        mode: 0644
+        backup: yes
+
+    - name: initialize pmod
+      raw: update-crypto-policies --show;update-crypto-policies --set DEFAULT:NO-SHA1:DISABLE-CBC
+      register: pmod_output
+
+    - name: Command output
+      debug:
+        msg: '{{pmod_output.stdout_lines}}'

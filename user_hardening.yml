@@ -3,7 +3,7 @@
   remote_user: godsonan
   become: True
   vars:
-    password: 
+    password:
   tasks:
     - name: get script
       copy:

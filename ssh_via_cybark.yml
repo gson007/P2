@@ -1,0 +1,57 @@
+---
+- hosts: invent
+  gather_facts: False
+  #  remote_user: godsonan
+  become: True
+  vars :
+     password : Welcome@123
+     user: godsonan
+  tasks:
+    - name: update ssh_config Allowusers
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^(.*)AllowUsers(.*)$'
+        line: 'AllowUsers *'
+        backrefs: yes
+
+    - name: update ssh_config Allowgroups
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^(.*)AllowGroups(.*)$'
+        line: 'AllowGroups *'
+        backrefs: yes
+
+
+    - name: restart ssh service
+      service:
+         name: sshd
+         state: restarted
+
+    - name: Create user account
+      user:
+         name: "{{user}}"
+         update_password: always
+         password: "{{ password | password_hash('sha512') }}"
+
+    - name: modify sudo access
+      lineinfile:
+        path: /etc/sudoers
+        state: present
+        regexp: '^{{item}} ALL='
+        line: '{{item}} ALL=(ALL) NOPASSWD: ALL'
+        validate: /usr/sbin/visudo -cf %s
+      with_items:
+      - godsonan
+
+[godsonan@CDKINJSSVMOEM03 ~]$
+[invent]
+172.16.85.29
+172.16.85.30
+172.16.85.15
+172.16.85.16
+172.16.85.1
+172.16.85.2
+[invent:vars]
+ansible_ssh_host = 10.200.172.176
+ansible_password = Kc9dB%$N5D6D11
+ansible_ssh_user = tewof001@titanbss@{{inventory_hostname}}
