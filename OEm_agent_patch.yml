@@ -1,0 +1,90 @@
+---
+- hosts: invent
+  remote_user: godsonan
+  become: True
+  tasks:
+    - name: ensure zip, unzip packages are installed
+      package:
+        name:
+          - zip
+          - unzip
+        state: present
+
+    - name: confirm swap is enable and >= 3G
+      debug:
+        msg: "swap is enabled. Total Swap:{{ ansible_swapfree_mb}} MB"
+      when: ansible_swapfree_mb >= 3072
+
+    - name: create directory for patch file
+      file:
+        path: /opt/oempatch_agent/
+        state: directory
+        mode: 0777
+      when: ansible_swapfree_mb >= 3072
+
+    - name: Copy patch file oempatch_agent directory
+      copy:
+        src: /home/godsonan/oem_agent/
+        dest: /opt/oempatch_agent/
+        mode: 0777
+        remote_src: yes
+      when: ansible_swapfree_mb >= 3072
+
+    - name: list home directory of oem agent
+      shell:
+        cmd: |
+          echo "whoami: $(whoami)"
+          echo "id: $(id)"
+          echo "HOME: $HOME"
+          echo "USER: $USER"
+          echo "PWD: $(pwd)"
+      register: raw_output
+      become_user: oraagent
+
+    - name: display output
+      debug:
+        msg: '{{raw_output.stdout_lines}}'
+
+    - name: check oem agent service status
+      shell:
+        cmd: $HOME/monitor/agent_13.5.0.0.0/bin/emctl status agent
+      become_user: oraagent
+      register: oem_agent_status
+
+    - name: Agent status display
+      debug:
+        msg: '{{ oem_agent_status.stdout_lines}}'
+
+    - name: Stop oem agent service
+      shell:
+        cmd: $HOME/monitor/agent_13.5.0.0.0/bin/emctl stop agent
+      become_user: oraagent
+      when: ansible_swapfree_mb >= 3072
+      register: oem_agent_stop
+
+    - name: Agent status display
+      debug:
+        msg: '{{oem_agent_stop.stdout_lines }}'
+
+    - name: find all zip file
+      find:
+        path: /opt/oempatch_agent/
+        patterns: "*.zip"
+      register: zip_files
+
+    - name: Unarchive agent patch file
+      unarchive:
+        src: "{{ item.path }}"
+        dest: $HOME/monitor/agent_13.5.0.0.0/
+        remote_src: yes
+      become_user: oraagent
+      loop: "{{ zip_files.files}}"
+
+    - name: create backup of both jdk and Opatch
+      shell:
+      cmd: mv $HOME/monitor/agent_13.5.0.0.0/jdk $HOME/monitor/agent_13.5.0.0.0/jdk.bak;mv $HOME/monitor/agent_13.5.0.0.0/OPatch $HOME/monitor/agent_13.5.0.0.0/OPatch.bak;
+      become_user: oraagent
+    - name: untar java file
+      shell:
+        cmd: tar -xf $HOME/monitor/agent_13.5.0.0.0/jdk-8u481-linux-x64.tar.gz;mv $HOME/monitor/agent_13.5.0.0.0/jdk1.8.0_481/ $HOME/monitor/agent_13.5.0.0.0/jdk
+      become_user: oraagent
